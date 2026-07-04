@@ -1,0 +1,10 @@
+---
+description: 执行 nebula-bench 项目禁令（权威文本见 PROJECT_BANS.md）
+alwaysApply: true
+---
+
+# 项目禁令
+
+**权威文本**：仓库根目录 [`PROJECT_BANS.md`](../../PROJECT_BANS.md)。不得只读本文件而不读正文。
+
+执行时遵守 `PROJECT_BANS.md` 全部条款；链接/编译契约变更必须先列差异并由维护者确认。

@@ -1,0 +1,8 @@
+# Minimal deps for official tests/bench on CI (Python 3.12).
+# Do not use nebula/tests/requirements.txt — pinned legacy packages fail to build.
+pytest>=7.4,<9
+pytest-benchmark>=4.0
+pytest-bdd>=6.0,<8
+pytest-xdist>=3.0,<4
+nebula3-python>=3.4
+pyyaml>=6.0

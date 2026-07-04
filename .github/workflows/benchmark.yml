@@ -1,0 +1,98 @@
+name: Nebula benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      nebula_repo:
+        description: NebulaGraph repository (owner/name)
+        required: false
+        default: topling/nebula
+      nebula_ref:
+        description: NebulaGraph branch or ref
+        required: false
+        default: toplingdb-bench
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nebula-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BENCH_ROOT: ${{ github.workspace }}
+  NEBULA_ROOT: ${{ github.workspace }}/nebula
+  NEBULA_REPO: ${{ github.event.inputs.nebula_repo || 'topling/nebula' }}
+  NEBULA_REF: ${{ github.event.inputs.nebula_ref || 'toplingdb-bench' }}
+
+jobs:
+  benchmark:
+    name: ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [rocksdb, conservative, enterprise]
+    env:
+      CI: "true"
+      BENCH_PROFILE: ${{ matrix.profile }}
+      INSTALL_SYSTEM_DEPS: "1"
+    steps:
+      - name: Checkout nebula-bench
+        uses: actions/checkout@v4
+
+      - name: Checkout NebulaGraph
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NEBULA_REPO }}
+          ref: ${{ env.NEBULA_REF }}
+          path: nebula
+
+      - name: Preflight
+        run: bash scripts/ci-benchmark-preflight.sh
+
+      - name: 1M benchmark
+        run: bash scripts/ci-benchmark-topling.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.profile }}
+          path: |
+            nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}.json
+            nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}-data.json
+            nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}-report.json
+          if-no-files-found: ignore
+
+  report:
+    name: aggregate-ai-report
+    needs: benchmark
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout nebula-bench
+        uses: actions/checkout@v4
+
+      - name: Download profile artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: benchmark-*
+          merge-multiple: true
+          path: ci-artifacts
+
+      - name: Merge AI-friendly run report
+        run: python3 scripts/ci-benchmark-merge-reports.py --input ci-artifacts --output benchmark-run-report.json
+
+      - name: Upload merged AI report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-run-report
+          path: benchmark-run-report.json
+          if-no-files-found: ignore
