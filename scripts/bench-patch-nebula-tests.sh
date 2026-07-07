@@ -13,6 +13,14 @@ if [[ -f "${_lookup}" ]]; then
   fi
 fi
 
+for _bench in insert.py lookup.py; do
+  _f="${NEBULA_ROOT}/tests/bench/${_bench}"
+  [[ -f "${_f}" ]] || continue
+  if grep -q 'CREATE SPACE IF NOT EXISTS' "${_f}" && ! grep -q 'vid_type=' "${_f}"; then
+    sed -i 's/replica_factor={replica_factor})/replica_factor={replica_factor}, vid_type=INT64)/' "${_f}"
+  fi
+done
+
 _insert="${NEBULA_ROOT}/tests/bench/insert.py"
 if [[ -f "${_insert}" ]] && grep -q 'self\.graph_delay' "${_insert}"; then
   sed -i 's/self\.graph_delay/self.delay/g' "${_insert}"
