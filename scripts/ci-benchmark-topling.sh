@@ -201,11 +201,13 @@ run_official_bench() {
   export BENCH_GRAPH_HOST="127.0.0.1"
   export BENCH_GRAPH_PORT="${port}"
   export BENCH_READ_STAGE=post_insert
-  "${BENCH_PYTHON}" -m pytest \
-    "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
-    --rootdir="${NEBULA_ROOT}/tests" \
-    "${pytest_common[@]}" \
-    --benchmark-json="${read1_json}" || read_post_insert_rc=$?
+  (
+    cd "${NEBULA_ROOT}/tests"
+    "${BENCH_PYTHON}" -m pytest \
+      "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+      "${pytest_common[@]}" \
+      --benchmark-json="${read1_json}"
+  ) || read_post_insert_rc=$?
 
   if (( read_post_insert_rc == 0 )); then
     "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
