@@ -87,6 +87,17 @@ mkdir -p "${NEBULA_ROOT}/tests/.pytest"
 export BENCH_ROOT
 # shellcheck source=bench-patch-nebula-tests.sh
 source "${BENCH_ROOT}/scripts/bench-patch-nebula-tests.sh"
+for _bench in insert.py lookup.py; do
+  _pf="${NEBULA_ROOT}/tests/bench/${_bench}"
+  if ! grep -q 'NEBULA_BENCH_SKIP_CLEANUP' "${_pf}"; then
+    echo "bench patch missing SKIP_CLEANUP guard in tests/bench/${_bench}" >&2
+    exit 1
+  fi
+  if ! grep -q 'vid_type=INT64' "${_pf}"; then
+    echo "bench patch missing vid_type=INT64 in tests/bench/${_bench}" >&2
+    exit 1
+  fi
+done
 # shellcheck source=bench-python-env.sh
 source "${BENCH_ROOT}/scripts/bench-python-env.sh"
 
@@ -103,5 +114,26 @@ print('bench modules ok')
   exit 1
 fi
 rm -f "${_preflight_log}"
+
+# storage 采集函数 smoke test（不依赖 nebula 进程）
+_smoke_profile="preflight-smoke"
+_smoke_dir="${NEBULA_ROOT}/data-${_smoke_profile}"
+_smoke_json="${NEBULA_ROOT}/tests/.pytest/preflight-storage-smoke.json"
+rm -rf "${_smoke_dir}"
+mkdir -p "${_smoke_dir}/storage" "${_smoke_dir}/meta"
+echo "bench" > "${_smoke_dir}/storage/sample.dat"
+export NEBULA_BENCH_STORAGE_STAGE=preflight_smoke
+if ! nebula_bench_record_data_dir_size "${_smoke_profile}" "${_smoke_json}" >/dev/null; then
+  echo "nebula_bench_record_data_dir_size smoke test failed" >&2
+  rm -rf "${_smoke_dir}" "${_smoke_json}"
+  exit 1
+fi
+if ! grep -q '"measurement_stage": "preflight_smoke"' "${_smoke_json}"; then
+  echo "storage json missing expected measurement_stage" >&2
+  rm -rf "${_smoke_dir}" "${_smoke_json}"
+  exit 1
+fi
+rm -rf "${_smoke_dir}" "${_smoke_json}"
+unset NEBULA_BENCH_STORAGE_STAGE
 
 log "ok"

@@ -152,10 +152,11 @@ stop_standalone() {
 }
 
 run_official_bench() {
-  local port json insert_rc=0 lookup_rc=0
+  local port insert_json lookup_json insert_rc=0 lookup_rc=0
   port="$(graph_port)"
-  json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}.json"
-  mkdir -p "$(dirname "${json}")"
+  insert_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}.json"
+  lookup_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-lookup.json"
+  mkdir -p "$(dirname "${insert_json}")"
   log "running official tests/bench on 127.0.0.1:${port}"
   export BENCH_ROOT
   # shellcheck source=bench-patch-nebula-tests.sh
@@ -172,7 +173,6 @@ run_official_bench() {
     --address="127.0.0.1:${port}"
     --stop_nebula=false --rm_dir=false
     --benchmark-only
-    --benchmark-json="${json}"
     -v
   )
 
@@ -180,13 +180,21 @@ run_official_bench() {
   export NEBULA_BENCH_SKIP_CLEANUP=1
   "${BENCH_PYTHON}" -m pytest \
     "${NEBULA_ROOT}/tests/bench/insert.py" \
-    "${pytest_common[@]}" || insert_rc=$?
-  record_bench_data_size
-  unset NEBULA_BENCH_SKIP_CLEANUP
+    "${pytest_common[@]}" \
+    --benchmark-json="${insert_json}" || insert_rc=$?
+
+  if (( insert_rc == 0 )); then
+    export NEBULA_BENCH_STORAGE_STAGE=post_insert_pre_drop
+    record_bench_data_size
+  else
+    log "skip storage record: insert benchmark failed (rc=${insert_rc})"
+  fi
+  unset NEBULA_BENCH_SKIP_CLEANUP NEBULA_BENCH_STORAGE_STAGE
 
   "${BENCH_PYTHON}" -m pytest \
     "${NEBULA_ROOT}/tests/bench/lookup.py" \
-    "${pytest_common[@]}" || lookup_rc=$?
+    "${pytest_common[@]}" \
+    --benchmark-json="${lookup_json}" || lookup_rc=$?
 
   if (( insert_rc != 0 )); then
     return "${insert_rc}"

@@ -45,12 +45,33 @@ def _simplify_benchmarks(raw: dict[str, Any] | None) -> list[dict[str, Any]]:
     return out
 
 
-def _status(bench_rc: int, perf: dict[str, Any] | None, storage: dict[str, Any] | None) -> str:
+def _load_benchmark_files(pytest_dir: Path, profile: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """合并 insert 与 lookup 两份 pytest-benchmark JSON。"""
+    benchmarks: list[dict[str, Any]] = []
+    load_errors: list[str] = []
+    for suffix in ("", "-lookup"):
+        path = pytest_dir / f"benchmark-ci-{profile}{suffix}.json"
+        raw = _read_json(path)
+        if raw is None:
+            continue
+        if "_load_error" in raw:
+            load_errors.append(f"{path.name}: {raw['_load_error']}")
+            continue
+        benchmarks.extend(_simplify_benchmarks(raw))
+    return benchmarks, load_errors
+
+
+def _status(
+    bench_rc: int,
+    benchmarks: list[dict[str, Any]],
+    storage: dict[str, Any] | None,
+    perf_errors: list[str],
+) -> str:
     if bench_rc != 0:
         return "benchmark_failed"
-    if not perf or "_load_error" in perf:
+    if perf_errors:
         return "performance_missing"
-    if not _simplify_benchmarks(perf):
+    if not benchmarks:
         return "performance_empty"
     if not storage or "_load_error" in storage:
         return "storage_missing"
@@ -65,12 +86,13 @@ def main() -> int:
 
     pytest_dir = nebula_root / "tests" / ".pytest"
     perf_path = pytest_dir / f"benchmark-ci-{profile}.json"
+    lookup_perf_path = pytest_dir / f"benchmark-ci-{profile}-lookup.json"
     storage_path = pytest_dir / f"benchmark-ci-{profile}-data.json"
     report_path = pytest_dir / f"benchmark-ci-{profile}-report.json"
 
-    perf_raw = _read_json(perf_path)
+    benchmarks, perf_errors = _load_benchmark_files(pytest_dir, profile)
     storage_raw = _read_json(storage_path)
-    status = _status(bench_rc, perf_raw, storage_raw)
+    status = _status(bench_rc, benchmarks, storage_raw, perf_errors)
 
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -92,15 +114,16 @@ def main() -> int:
             "nebula_ref": os.environ.get("NEBULA_REF"),
         },
         "files": {
-            "performance": str(perf_path),
+            "performance_insert": str(perf_path),
+            "performance_lookup": str(lookup_perf_path),
             "storage": str(storage_path),
             "report": str(report_path),
         },
         "performance": {
-            "available": perf_raw is not None and "_load_error" not in (perf_raw or {}),
-            "benchmark_count": len(_simplify_benchmarks(perf_raw)),
-            "benchmarks": _simplify_benchmarks(perf_raw),
-            "load_error": (perf_raw or {}).get("_load_error"),
+            "available": bool(benchmarks) and not perf_errors,
+            "benchmark_count": len(benchmarks),
+            "benchmarks": benchmarks,
+            "load_errors": perf_errors or None,
         },
         "storage": (
             {
@@ -131,8 +154,14 @@ def main() -> int:
             summary.write(f"- **status**: `{status}`\n")
             summary.write(f"- **benchmark_exit_code**: `{bench_rc}`\n")
             if report["storage"].get("available"):
+                st = report["storage"]
                 summary.write(
-                    f"- **data_dir_disk_bytes**: `{report['storage'].get('data_dir_disk_bytes')}`\n"
+                    f"- **data_dir_disk_bytes**: `{st.get('data_dir_disk_bytes')}` "
+                    f"(stage: `{st.get('measurement_stage', '?')}`)\n"
+                )
+                summary.write(
+                    f"- **storage_disk_bytes**: `{st.get('storage_disk_bytes')}` | "
+                    f"**meta_disk_bytes**: `{st.get('meta_disk_bytes')}`\n"
                 )
             summary.write("\n```json\n")
             json.dump(report, summary, indent=2, ensure_ascii=False)

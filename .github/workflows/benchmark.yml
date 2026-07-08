@@ -66,6 +66,7 @@ jobs:
           name: benchmark-${{ matrix.profile }}
           path: |
             nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}.json
+            nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}-lookup.json
             nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}-data.json
             nebula/tests/.pytest/benchmark-ci-${{ matrix.profile }}-report.json
           if-no-files-found: ignore

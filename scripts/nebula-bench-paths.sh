@@ -81,7 +81,7 @@ nebula_bench_record_data_dir_size() {
   local profile=$1
   local out_json="${2:-${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${profile}-data.json}"
   local data_dir bytes storage_bytes meta_bytes disk_bytes storage_disk meta_disk
-  local apparent_bytes storage_apparent meta_apparent human
+  local apparent_bytes storage_apparent meta_apparent human stage
 
   data_dir="$(nebula_bench_data_dir "${profile}")"
   if [[ ! -d "${data_dir}" ]]; then
@@ -111,12 +111,15 @@ nebula_bench_record_data_dir_size() {
   fi
   apparent_bytes="$(du -sb "${data_dir}" | cut -f1)"
   human="$(nebula_bench_format_bytes "${bytes}")"
+  stage="${NEBULA_BENCH_STORAGE_STAGE:-post_insert_pre_drop}"
 
   mkdir -p "$(dirname "${out_json}")"
   cat > "${out_json}" <<EOF
 {
   "profile": "${profile}",
   "data_dir": "${data_dir}",
+  "measurement_stage": "${stage}",
+  "measurement_method": "du -sk (disk blocks)",
   "data_dir_bytes": ${bytes},
   "data_dir_disk_bytes": ${disk_bytes},
   "data_dir_apparent_bytes": ${apparent_bytes},

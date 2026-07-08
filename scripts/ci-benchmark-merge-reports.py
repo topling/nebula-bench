@@ -21,13 +21,23 @@ def _find_profile_report(root: Path, profile: str) -> Path | None:
     return None
 
 
+def _storage_disk_bytes(st: dict[str, Any]) -> int | None:
+    if not st.get("available"):
+        return None
+    return st.get("data_dir_disk_bytes", st.get("data_dir_bytes"))
+
+
 def _comparison(results: dict[str, Any]) -> dict[str, Any]:
-    storage: dict[str, int | None] = {}
+    storage_disk: dict[str, int | None] = {}
+    storage_meta: dict[str, int | None] = {}
     perf: dict[str, dict[str, dict[str, Any]]] = {}
 
     for profile, doc in results.items():
         st = doc.get("storage") or {}
-        storage[profile] = st.get("data_dir_bytes") if st.get("available") else None
+        storage_disk[profile] = _storage_disk_bytes(st)
+        storage_meta[profile] = (
+            st.get("meta_disk_bytes", st.get("meta_bytes")) if st.get("available") else None
+        )
 
         for bench in (doc.get("performance") or {}).get("benchmarks") or []:
             key = bench.get("fullname") or bench.get("name") or "unknown"
@@ -39,7 +49,10 @@ def _comparison(results: dict[str, Any]) -> dict[str, Any]:
             }
 
     return {
-        "storage_data_dir_bytes": storage,
+        "storage_data_dir_disk_bytes": storage_disk,
+        "storage_meta_disk_bytes": storage_meta,
+        # 兼容旧字段名；值已与 disk_bytes 对齐
+        "storage_data_dir_bytes": storage_disk,
         "performance_by_benchmark": perf,
     }
 
@@ -94,16 +107,18 @@ def main() -> int:
     if summary_path:
         with open(summary_path, "w", encoding="utf-8") as summary:
             summary.write("# Nebula Benchmark — AI Run Report\n\n")
-            summary.write("| profile | status | data_dir_bytes |\n")
-            summary.write("|---------|--------|----------------|\n")
+            summary.write("| profile | status | data_dir_disk_bytes | meta_disk_bytes |\n")
+            summary.write("|---------|--------|---------------------|-----------------|\n")
             for profile in PROFILES:
                 doc = results.get(profile)
                 if not doc:
-                    summary.write(f"| {profile} | _missing_ | — |\n")
+                    summary.write(f"| {profile} | _missing_ | — | — |\n")
                     continue
                 status = (doc.get("outcome") or {}).get("status", "?")
-                nbytes = (doc.get("storage") or {}).get("data_dir_bytes", "—")
-                summary.write(f"| {profile} | `{status}` | `{nbytes}` |\n")
+                st = doc.get("storage") or {}
+                data_disk = st.get("data_dir_disk_bytes", st.get("data_dir_bytes", "—"))
+                meta_disk = st.get("meta_disk_bytes", st.get("meta_bytes", "—"))
+                summary.write(f"| {profile} | `{status}` | `{data_disk}` | `{meta_disk}` |\n")
             summary.write("\n## Full JSON\n\n```json\n")
             json.dump(merged, summary, indent=2, ensure_ascii=False)
             summary.write("\n```\n")
