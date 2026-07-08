@@ -11,6 +11,9 @@ if [[ -f "${_lookup}" ]]; then
   if grep -q "replica_factor=self.replica_factor)')" "${_lookup}"; then
     sed -i "s/replica_factor=self.replica_factor)')/replica_factor=self.replica_factor))/" "${_lookup}"
   fi
+  if grep -q 'time\.sleep(4)' "${_lookup}"; then
+    sed -i 's/time\.sleep(4)/time.sleep(self.delay)/g' "${_lookup}"
+  fi
 fi
 
 for _bench in insert.py lookup.py; do
