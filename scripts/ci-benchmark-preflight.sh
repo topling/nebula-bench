@@ -118,6 +118,22 @@ print('bench modules ok')
 fi
 rm -f "${_preflight_log}"
 
+# read 基准须在 tests/bench 下 invoke，否则 pytest 无法识别 --address
+_read_bench="${NEBULA_ROOT}/tests/bench/bench-read-insert-space.py"
+cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${_read_bench}"
+export PYTHONPATH="${NEBULA_ROOT}"
+_preflight_log="$(mktemp)"
+if ! "${BENCH_PYTHON}" -m pytest "${_read_bench}" \
+  --collect-only \
+  --address=127.0.0.1:9669 --stop_nebula=false --rm_dir=false \
+  -q >"${_preflight_log}" 2>&1; then
+  echo "bench-read-insert-space pytest options smoke failed" >&2
+  cat "${_preflight_log}" >&2
+  rm -f "${_preflight_log}"
+  exit 1
+fi
+rm -f "${_preflight_log}"
+
 # storage schema v2 smoke（不依赖 nebula 进程）
 _smoke_profile="preflight-smoke"
 _smoke_dir="${NEBULA_ROOT}/data-${_smoke_profile}"
