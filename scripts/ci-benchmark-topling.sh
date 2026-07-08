@@ -173,6 +173,9 @@ run_official_bench() {
   # shellcheck source=bench-seed-pytest-state.sh
   source "${BENCH_ROOT}/scripts/bench-seed-pytest-state.sh"
 
+  local read_bench="${NEBULA_ROOT}/tests/bench/bench-read-insert-space.py"
+  cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${read_bench}"
+
   local -a pytest_common=(
     --address="127.0.0.1:${port}"
     --stop_nebula=false --rm_dir=false
@@ -230,11 +233,13 @@ run_official_bench() {
 
     if (( compact_rc == 0 )); then
       export BENCH_READ_STAGE=post_compact
-      "${BENCH_PYTHON}" -m pytest \
-        "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
-        --rootdir="${NEBULA_ROOT}/tests" \
-        "${pytest_common[@]}" \
-        --benchmark-json="${read2_json}" || read_post_compact_rc=$?
+      (
+        cd "${NEBULA_ROOT}/tests"
+        "${BENCH_PYTHON}" -m pytest \
+          "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+          "${pytest_common[@]}" \
+          --benchmark-json="${read2_json}"
+      ) || read_post_compact_rc=$?
     fi
   else
     log "fail-fast: skip compact/read2/lookup after read_post_insert rc=${read_post_insert_rc}"
