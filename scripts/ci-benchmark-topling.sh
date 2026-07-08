@@ -203,6 +203,7 @@ run_official_bench() {
   export BENCH_READ_STAGE=post_insert
   "${BENCH_PYTHON}" -m pytest \
     "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+    --rootdir="${NEBULA_ROOT}/tests" \
     "${pytest_common[@]}" \
     --benchmark-json="${read1_json}" || read_post_insert_rc=$?
 
@@ -229,6 +230,7 @@ run_official_bench() {
       export BENCH_READ_STAGE=post_compact
       "${BENCH_PYTHON}" -m pytest \
         "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+        --rootdir="${NEBULA_ROOT}/tests" \
         "${pytest_common[@]}" \
         --benchmark-json="${read2_json}" || read_post_compact_rc=$?
     fi
