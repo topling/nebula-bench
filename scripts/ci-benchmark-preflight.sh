@@ -104,12 +104,19 @@ done
 # shellcheck source=bench-python-env.sh
 source "${BENCH_ROOT}/scripts/bench-python-env.sh"
 
+# read 基准复制到 tests/bench（须先于 import / pytest collect 校验）
+_read_bench="${NEBULA_ROOT}/tests/bench/bench_read_insert_space.py"
+cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${_read_bench}"
+
 _preflight_log="$(mktemp)"
 if ! "${BENCH_PYTHON}" -c "
 import sys
 sys.path.insert(0, '${NEBULA_ROOT}')
 import tests.bench.insert  # noqa: F401
 import tests.bench.lookup  # noqa: F401
+from tests.common.nebula_test_suite import NebulaTestSuite
+from tests.bench.bench_read_insert_space import TestBenchReadInsertSpace
+assert issubclass(TestBenchReadInsertSpace, NebulaTestSuite)
 print('bench modules ok')
 " >"${_preflight_log}" 2>&1; then
   cat "${_preflight_log}" >&2
@@ -118,9 +125,6 @@ print('bench modules ok')
 fi
 rm -f "${_preflight_log}"
 
-# read 基准须在 tests/bench 下 invoke，否则 pytest 无法识别 --address
-_read_bench="${NEBULA_ROOT}/tests/bench/bench-read-insert-space.py"
-cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${_read_bench}"
 export PYTHONPATH="${NEBULA_ROOT}"
 _preflight_log="$(mktemp)"
 if ! "${BENCH_PYTHON}" -m pytest "${_read_bench}" \

@@ -8,24 +8,24 @@ import time
 
 import pytest
 
-from tests.common.nebula_test_suite import NebulaTest
+from tests.common.nebula_test_suite import NebulaTestSuite
 
 SPACE = "benchinsertspace"
 INDEX_DEFS = (
-    ("person_name_index", "CREATE TAG INDEX IF NOT EXISTS person_name_index ON person(name(20))"),
-    ("person_age_index", "CREATE TAG INDEX IF NOT EXISTS person_age_index ON person(age)"),
+    ("personName", "CREATE TAG index IF NOT EXISTS personName on person(name)"),
+    ("personAge", "CREATE TAG index IF NOT EXISTS personAge on person(age)"),
 )
 LOOKUP_QUERIES = (
-    'LOOKUP ON person WHERE person.name == "Bob" YIELD person.name AS name',
-    'LOOKUP ON person WHERE person.name == "Alice" YIELD person.name AS name',
-    'LOOKUP ON person WHERE person.name == "Tom" YIELD person.name AS name',
-    'LOOKUP ON person WHERE person.name == "Jerry" YIELD person.name AS name',
-    'LOOKUP ON person WHERE person.name == "Kate" YIELD person.name AS name',
-    'LOOKUP ON person WHERE person.age == 20 YIELD person.age AS age',
-    'LOOKUP ON person WHERE person.age == 25 YIELD person.age AS age',
-    'LOOKUP ON person WHERE person.age == 30 YIELD person.age AS age',
-    'LOOKUP ON person WHERE person.age == 35 YIELD person.age AS age',
-    'LOOKUP ON person WHERE person.age == 40 YIELD person.age AS age',
+    "lookup on person where person.age < 0 ",
+    "lookup on person where person.age > 0 ",
+    "lookup on person where person.age > 60",
+    "lookup on person where person.age > 90",
+    'lookup on person where person.name == "sssssaass" ',
+    'lookup on person where person.name == "saaaaaass" ',
+    "lookup on person where person.age < 10 ",
+    "lookup on person where person.age > 80 ",
+    "lookup on person where person.age > 60",
+    "lookup on person where person.age > 90",
 )
 
 
@@ -33,22 +33,24 @@ def _read_stage() -> str:
     return os.environ.get("BENCH_READ_STAGE", "post_insert")
 
 
-class TestBenchReadInsertSpace(NebulaTest):
-    space = SPACE
-
+class TestBenchReadInsertSpace(NebulaTestSuite):
     @classmethod
-    def setup_class(cls) -> None:
-        cls.init()
-        cls.use_space()
+    def prepare(cls) -> None:
+        resp = cls.execute(f"USE {SPACE}")
+        cls.check_resp_succeeded(resp)
         if _read_stage() == "post_insert":
-            cls._ensure_indexes()
+            for _, ddl in INDEX_DEFS:
+                resp = cls.execute(ddl)
+                cls.check_resp_succeeded(resp)
+            time.sleep(cls.delay)
         cls._wait_indexes_ready()
 
     @classmethod
-    def _ensure_indexes(cls) -> None:
-        for _, ddl in INDEX_DEFS:
-            resp = cls.execute(ddl)
-            assert resp.is_succeeded(), resp.error_msg()
+    def cleanup(cls) -> None:
+        if os.environ.get("NEBULA_BENCH_SKIP_CLEANUP"):
+            return
+        resp = cls.execute(f"DROP SPACE {SPACE}")
+        cls.check_resp_succeeded(resp)
 
     @classmethod
     def _wait_indexes_ready(cls) -> None:
@@ -64,7 +66,6 @@ class TestBenchReadInsertSpace(NebulaTest):
 
     @classmethod
     def _index_status(cls, index_name: str) -> str | None:
-        """返回索引状态；nGQL 不可用或行中无该索引时返回 None。"""
         status_resp = cls.execute("SHOW TAG INDEX STATUS")
         if not status_resp.is_succeeded() or status_resp.row_size() == 0:
             return None
@@ -125,12 +126,30 @@ class TestBenchReadInsertSpace(NebulaTest):
     def _run_lookups(self) -> None:
         for query in LOOKUP_QUERIES:
             resp = self.execute(query)
-            assert resp.is_succeeded(), resp.error_msg()
+            self.check_resp_succeeded(resp)
 
     @pytest.mark.skipif(_read_stage() != "post_insert", reason="BENCH_READ_STAGE != post_insert")
+    @pytest.mark.benchmark(
+        group="read",
+        min_time=0.1,
+        max_time=0.5,
+        min_rounds=1,
+        timer=time.time,
+        disable_gc=True,
+        warmup=False,
+    )
     def test_read_post_insert(self, benchmark) -> None:
-        benchmark.pedantic(self._run_lookups, rounds=1, iterations=1)
+        benchmark(self._run_lookups)
 
     @pytest.mark.skipif(_read_stage() != "post_compact", reason="BENCH_READ_STAGE != post_compact")
+    @pytest.mark.benchmark(
+        group="read",
+        min_time=0.1,
+        max_time=0.5,
+        min_rounds=1,
+        timer=time.time,
+        disable_gc=True,
+        warmup=False,
+    )
     def test_read_post_compact(self, benchmark) -> None:
-        benchmark.pedantic(self._run_lookups, rounds=1, iterations=1)
+        benchmark(self._run_lookups)

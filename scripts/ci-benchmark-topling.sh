@@ -173,7 +173,7 @@ run_official_bench() {
   # shellcheck source=bench-seed-pytest-state.sh
   source "${BENCH_ROOT}/scripts/bench-seed-pytest-state.sh"
 
-  local read_bench="${NEBULA_ROOT}/tests/bench/bench-read-insert-space.py"
+  local read_bench="${NEBULA_ROOT}/tests/bench/bench_read_insert_space.py"
   cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${read_bench}"
 
   local -a pytest_common=(
@@ -204,13 +204,10 @@ run_official_bench() {
   export BENCH_GRAPH_HOST="127.0.0.1"
   export BENCH_GRAPH_PORT="${port}"
   export BENCH_READ_STAGE=post_insert
-  (
-    cd "${NEBULA_ROOT}/tests"
-    "${BENCH_PYTHON}" -m pytest \
-      "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
-      "${pytest_common[@]}" \
-      --benchmark-json="${read1_json}"
-  ) || read_post_insert_rc=$?
+  "${BENCH_PYTHON}" -m pytest \
+    "${read_bench}" \
+    "${pytest_common[@]}" \
+    --benchmark-json="${read1_json}" || read_post_insert_rc=$?
 
   if (( read_post_insert_rc == 0 )); then
     "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
@@ -233,13 +230,10 @@ run_official_bench() {
 
     if (( compact_rc == 0 )); then
       export BENCH_READ_STAGE=post_compact
-      (
-        cd "${NEBULA_ROOT}/tests"
-        "${BENCH_PYTHON}" -m pytest \
-          "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
-          "${pytest_common[@]}" \
-          --benchmark-json="${read2_json}"
-      ) || read_post_compact_rc=$?
+      "${BENCH_PYTHON}" -m pytest \
+        "${read_bench}" \
+        "${pytest_common[@]}" \
+        --benchmark-json="${read2_json}" || read_post_compact_rc=$?
     fi
   else
     log "fail-fast: skip compact/read2/lookup after read_post_insert rc=${read_post_insert_rc}"
