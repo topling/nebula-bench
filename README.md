@@ -2,7 +2,7 @@
 
 NebulaGraph 性能对比编排仓库（仅 bash + workflow + 配置）。
 
-> **项目禁令**（硬性约束，变更须维护者确认）：[`PROJECT_BANS.md`](PROJECT_BANS.md)
+> **项目铁律**（硬性约束，变更须维护者确认）：[`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md)
 
 - checkout [topling/nebula](https://github.com/topling/nebula) `@toplingdb-bench`（ToplingDB 动态链接集成，见 nebula README ToplingDB 节）
 - 性能用例复用 nebula 官方 `tests/bench/`
@@ -12,7 +12,7 @@ NebulaGraph 性能对比编排仓库（仅 bash + workflow + 配置）。
 
 | 路径 | 说明 |
 |------|------|
-| [`PROJECT_BANS.md`](PROJECT_BANS.md) | 项目硬性禁令 |
+| [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) | 项目铁律 |
 | `.github/workflows/benchmark.yml` | CI |
 | `scripts/*.sh` | 构建、启动、跑 bench |
 | `conf/*.conf` | standalone 端口与数据路径模板（`@NEBULA_DATA_DIR@`） |
@@ -46,7 +46,8 @@ nebula 上游已集成 ToplingDB 动态链接（`USE_TOPLINGDB`、`EXTERNAL_TOPL
 | **rocksdb** | `-DUSE_TOPLINGDB=OFF`，使用 third-party `librocksdb.a` |
 | **conservative / enterprise** | `-DEXTERNAL_TOPLINGDB_ROOT=${TOPLINGDB_ROOT}`，链 `librocksdb.so`（仅 shared） |
 
-ToplingDB **禁止 static 链接**——见 [`PROJECT_BANS.md`](PROJECT_BANS.md) 禁令 #1。
+ToplingDB **须 shared 链接**——见 [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) 铁律 #1。  
+性能基准**只准调用 nebula 官方 `tests/bench/`**——见 [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) 铁律 #2。
 
 以下两个 yaml 仅为开箱即用的 Easy Migrate 示例，编译运行不依赖它们；本仓库 bench 启动脚本会引用它们做 conservative / enterprise 对比：
 

@@ -35,7 +35,7 @@ bash .../bench-patch-nebula-rocksdb-link.sh
 undefined reference to rocksdb::GetDBOptionsFromMap ...
 ```
 
-属 **禁令 #1 所禁止的改动**（已在本仓库回滚）。
+违反 [`PROJECT_IRON_RULES.md`](../PROJECT_IRON_RULES.md) **铁律 #1**（须 shared 链接；已在本仓库回滚）。
 
 ## 复现
 

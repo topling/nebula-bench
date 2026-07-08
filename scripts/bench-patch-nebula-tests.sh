@@ -14,6 +14,32 @@ if [[ -f "${_lookup}" ]]; then
   if grep -q 'time\.sleep(4)' "${_lookup}"; then
     sed -i 's/time\.sleep(4)/time.sleep(self.delay)/g' "${_lookup}"
   fi
+  if grep -q 'def prepare(self):' "${_lookup}" && ! grep -q 'NEBULA_BENCH_LOOKUP_QUERY_ONLY' "${_lookup}"; then
+    python3 - "${_lookup}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "    @classmethod\n    def prepare(self):\n"
+guard = (
+    "    @classmethod\n"
+    "    def prepare(self):\n"
+    "        import os\n"
+    "        if os.environ.get(\"NEBULA_BENCH_LOOKUP_QUERY_ONLY\"):\n"
+    "            resp = self.execute('USE benchlookupspace')\n"
+    "            self.check_resp_succeeded(resp)\n"
+    "            time.sleep(self.delay)\n"
+    "            return\n"
+)
+if needle not in text:
+    if "NEBULA_BENCH_LOOKUP_QUERY_ONLY" in text:
+        sys.exit(0)
+    print(f"prepare pattern not found in {path}", file=sys.stderr)
+    sys.exit(1)
+path.write_text(text.replace(needle, guard, 1))
+PY
+  fi
 fi
 
 for _bench in insert.py lookup.py; do

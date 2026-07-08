@@ -153,14 +153,14 @@ stop_standalone() {
 
 run_official_bench() {
   local port insert_json lookup_json read1_json read2_json compact_json data_json
-  local insert_rc=0 read_post_insert_rc=0 compact_rc=0 read_post_compact_rc=0 lookup_rc=0
+  local insert_rc=0 lookup_post_insert_rc=0 compact_rc=0 lookup_post_compact_rc=0
   port="$(graph_port)"
   insert_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}.json"
   read1_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-read-post-insert.json"
   read2_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-read-post-compact.json"
   compact_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-compact.json"
   data_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-data.json"
-  lookup_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-lookup.json"
+  lookup_bench="${NEBULA_ROOT}/tests/bench/lookup.py"
   mkdir -p "$(dirname "${insert_json}")"
   log "running official tests/bench on 127.0.0.1:${port}"
   export BENCH_ROOT
@@ -172,9 +172,6 @@ run_official_bench() {
   export NEBULA_BENCH_FIXED_GRAPH_DELAY=33
   # shellcheck source=bench-seed-pytest-state.sh
   source "${BENCH_ROOT}/scripts/bench-seed-pytest-state.sh"
-
-  local read_bench="${NEBULA_ROOT}/tests/bench/bench_read_insert_space.py"
-  cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${read_bench}"
 
   local -a pytest_common=(
     --address="127.0.0.1:${port}"
@@ -201,15 +198,13 @@ run_official_bench() {
   "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
     --profile "${PROFILE_SUFFIX}" --stage post_insert --out "${data_json}"
 
-  export BENCH_GRAPH_HOST="127.0.0.1"
-  export BENCH_GRAPH_PORT="${port}"
-  export BENCH_READ_STAGE=post_insert
+  unset NEBULA_BENCH_LOOKUP_QUERY_ONLY
   "${BENCH_PYTHON}" -m pytest \
-    "${read_bench}" \
+    "${lookup_bench}" \
     "${pytest_common[@]}" \
-    --benchmark-json="${read1_json}" || read_post_insert_rc=$?
+    --benchmark-json="${read1_json}" || lookup_post_insert_rc=$?
 
-  if (( read_post_insert_rc == 0 )); then
+  if (( lookup_post_insert_rc == 0 )); then
     "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
       --profile "${PROFILE_SUFFIX}" --stage pre_compact --out "${data_json}"
 
@@ -229,35 +224,26 @@ run_official_bench() {
       --profile "${PROFILE_SUFFIX}" --stage post_compact --out "${data_json}"
 
     if (( compact_rc == 0 )); then
-      export BENCH_READ_STAGE=post_compact
+      export NEBULA_BENCH_LOOKUP_QUERY_ONLY=1
       "${BENCH_PYTHON}" -m pytest \
-        "${read_bench}" \
+        "${lookup_bench}" \
         "${pytest_common[@]}" \
-        --benchmark-json="${read2_json}" || read_post_compact_rc=$?
+        --benchmark-json="${read2_json}" || lookup_post_compact_rc=$?
+      unset NEBULA_BENCH_LOOKUP_QUERY_ONLY
     fi
   else
-    log "fail-fast: skip compact/read2/lookup after read_post_insert rc=${read_post_insert_rc}"
+    log "fail-fast: skip compact/lookup_post_compact after lookup_post_insert rc=${lookup_post_insert_rc}"
   fi
 
-  unset NEBULA_BENCH_SKIP_CLEANUP BENCH_READ_STAGE
+  unset NEBULA_BENCH_SKIP_CLEANUP NEBULA_BENCH_LOOKUP_QUERY_ONLY
 
-  if (( compact_rc == 0 && read_post_insert_rc == 0 )); then
-    "${BENCH_PYTHON}" -m pytest \
-      "${NEBULA_ROOT}/tests/bench/lookup.py" \
-      "${pytest_common[@]}" \
-      --benchmark-json="${lookup_json}" || lookup_rc=$?
-  else
-    log "skip lookup: compact_rc=${compact_rc} read1_rc=${read_post_insert_rc}"
-  fi
-
-  export BENCH_PHASE_RC="insert=${insert_rc},read1=${read_post_insert_rc},compact=${compact_rc},read2=${read_post_compact_rc},lookup=${lookup_rc}"
+  export BENCH_PHASE_RC="insert=${insert_rc},lookup1=${lookup_post_insert_rc},compact=${compact_rc},lookup2=${lookup_post_compact_rc}"
 
   local bench_rc=0
   if (( insert_rc != 0 )); then bench_rc=${insert_rc}
-  elif (( read_post_insert_rc != 0 )); then bench_rc=${read_post_insert_rc}
+  elif (( lookup_post_insert_rc != 0 )); then bench_rc=${lookup_post_insert_rc}
   elif (( compact_rc != 0 )); then bench_rc=${compact_rc}
-  elif (( read_post_compact_rc != 0 )); then bench_rc=${read_post_compact_rc}
-  elif (( lookup_rc != 0 )); then bench_rc=${lookup_rc}
+  elif (( lookup_post_compact_rc != 0 )); then bench_rc=${lookup_post_compact_rc}
   fi
   return "${bench_rc}"
 }

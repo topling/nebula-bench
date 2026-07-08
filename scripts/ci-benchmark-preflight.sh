@@ -36,7 +36,7 @@ do
 done
 
 for rel in \
-  PROJECT_BANS.md \
+  PROJECT_IRON_RULES.md \
   scripts/build-topling.sh \
   scripts/build-rocksdb.sh \
   scripts/run-standalone-topling.sh \
@@ -46,7 +46,6 @@ for rel in \
   scripts/ci-benchmark-merge-reports.py \
   scripts/bench-storage-record.py \
   scripts/bench-compact-spaces.py \
-  scripts/bench-read-insert-space.py \
   scripts/bench-wait-graph-ready.py \
   scripts/bench-patch-nebula-tests.sh \
   requirements-bench-ci.txt \
@@ -65,11 +64,11 @@ source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
 nebula_bench_check_conf_templates "${BENCH_ROOT}"
 
 if [[ -f "${BENCH_ROOT}/scripts/bench-patch-nebula-rocksdb-link.sh" ]]; then
-  echo "forbidden script present (see PROJECT_BANS.md #1): bench-patch-nebula-rocksdb-link.sh" >&2
+  echo "forbidden script present (see PROJECT_IRON_RULES.md #1): bench-patch-nebula-rocksdb-link.sh" >&2
   exit 1
 fi
 if grep -q 'static_lib' "${BENCH_ROOT}/scripts/ci-benchmark-topling.sh"; then
-  echo "forbidden: make static_lib in ci-benchmark-topling.sh (see PROJECT_BANS.md #1)" >&2
+  echo "forbidden: make static_lib in ci-benchmark-topling.sh (see PROJECT_IRON_RULES.md #1)" >&2
   exit 1
 fi
 if [[ -f "${BENCH_ROOT}/scripts/bench-patch-nebula-kvstore.sh" ]]; then
@@ -101,12 +100,12 @@ for _bench in insert.py lookup.py; do
     exit 1
   fi
 done
+if ! grep -q 'NEBULA_BENCH_LOOKUP_QUERY_ONLY' "${NEBULA_ROOT}/tests/bench/lookup.py"; then
+  echo "bench patch missing NEBULA_BENCH_LOOKUP_QUERY_ONLY in tests/bench/lookup.py" >&2
+  exit 1
+fi
 # shellcheck source=bench-python-env.sh
 source "${BENCH_ROOT}/scripts/bench-python-env.sh"
-
-# read 基准复制到 tests/bench（须先于 import / pytest collect 校验）
-_read_bench="${NEBULA_ROOT}/tests/bench/bench_read_insert_space.py"
-cp "${BENCH_ROOT}/scripts/bench-read-insert-space.py" "${_read_bench}"
 
 _preflight_log="$(mktemp)"
 if ! "${BENCH_PYTHON}" -c "
@@ -114,9 +113,6 @@ import sys
 sys.path.insert(0, '${NEBULA_ROOT}')
 import tests.bench.insert  # noqa: F401
 import tests.bench.lookup  # noqa: F401
-from tests.common.nebula_test_suite import NebulaTestSuite
-from tests.bench.bench_read_insert_space import TestBenchReadInsertSpace
-assert issubclass(TestBenchReadInsertSpace, NebulaTestSuite)
 print('bench modules ok')
 " >"${_preflight_log}" 2>&1; then
   cat "${_preflight_log}" >&2
@@ -127,11 +123,11 @@ rm -f "${_preflight_log}"
 
 export PYTHONPATH="${NEBULA_ROOT}"
 _preflight_log="$(mktemp)"
-if ! "${BENCH_PYTHON}" -m pytest "${_read_bench}" \
+if ! "${BENCH_PYTHON}" -m pytest "${NEBULA_ROOT}/tests/bench/lookup.py" \
   --collect-only \
   --address=127.0.0.1:9669 --stop_nebula=false --rm_dir=false \
   -q >"${_preflight_log}" 2>&1; then
-  echo "bench-read-insert-space pytest options smoke failed" >&2
+  echo "lookup.py pytest options smoke failed" >&2
   cat "${_preflight_log}" >&2
   rm -f "${_preflight_log}"
   exit 1
