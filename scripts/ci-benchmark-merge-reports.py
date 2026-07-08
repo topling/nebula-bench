@@ -12,6 +12,14 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 PROFILES = ("rocksdb", "conservative", "enterprise")
+STORAGE_STAGE_COLUMNS = (
+    ("post_insert_disk", "post_insert", "data_dir_disk_bytes"),
+    ("post_insert_apparent", "post_insert", "data_dir_apparent_bytes"),
+    ("pre_compact_disk", "pre_compact", "data_dir_disk_bytes"),
+    ("pre_compact_apparent", "pre_compact", "data_dir_apparent_bytes"),
+    ("post_compact_disk", "post_compact", "data_dir_disk_bytes"),
+    ("post_compact_apparent", "post_compact", "data_dir_apparent_bytes"),
+)
 
 
 def _find_profile_report(root: Path, profile: str) -> Path | None:
@@ -21,26 +29,67 @@ def _find_profile_report(root: Path, profile: str) -> Path | None:
     return None
 
 
-def _storage_disk_bytes(st: dict[str, Any]) -> int | None:
-    if not st.get("available"):
-        return None
-    return st.get("data_dir_disk_bytes", st.get("data_dir_bytes"))
+def _stage_field(st: dict[str, Any], stage: str, field: str) -> int | None:
+    stages = st.get("stages") or {}
+    block = stages.get(stage) or {}
+    value = block.get(field)
+    if isinstance(value, int):
+        return value
+    if stage == "post_insert":
+        if field == "data_dir_disk_bytes":
+            legacy = st.get("data_dir_disk_bytes", st.get("data_dir_bytes"))
+            return legacy if isinstance(legacy, int) else None
+        if field == "data_dir_apparent_bytes":
+            legacy = st.get("data_dir_apparent_bytes")
+            return legacy if isinstance(legacy, int) else None
+    return None
+
+
+def _compact_sec(st: dict[str, Any]) -> float | None:
+    compact = st.get("compact") or {}
+    value = compact.get("duration_sec")
+    return value if isinstance(value, (int, float)) else None
 
 
 def _comparison(results: dict[str, Any]) -> dict[str, Any]:
-    storage_disk: dict[str, int | None] = {}
-    storage_meta: dict[str, int | None] = {}
+    storage_cols: dict[str, dict[str, int | float | None]] = {
+        col: {} for col, _, _ in STORAGE_STAGE_COLUMNS
+    }
+    storage_cols["compact_sec"] = {}
     perf: dict[str, dict[str, dict[str, Any]]] = {}
+    derived: dict[str, dict[str, int | None]] = {
+        "compact_disk_saved": {},
+        "compact_apparent_saved": {},
+    }
 
     for profile, doc in results.items():
         st = doc.get("storage") or {}
-        storage_disk[profile] = _storage_disk_bytes(st)
-        storage_meta[profile] = (
-            st.get("meta_disk_bytes", st.get("meta_bytes")) if st.get("available") else None
-        )
+        if not st.get("available"):
+            for col, _, _ in STORAGE_STAGE_COLUMNS:
+                storage_cols[col][profile] = None
+            storage_cols["compact_sec"][profile] = None
+            continue
+
+        for col, stage, field in STORAGE_STAGE_COLUMNS:
+            storage_cols[col][profile] = _stage_field(st, stage, field)
+        storage_cols["compact_sec"][profile] = _compact_sec(st)
+
+        pre_disk = _stage_field(st, "pre_compact", "data_dir_disk_bytes")
+        post_disk = _stage_field(st, "post_compact", "data_dir_disk_bytes")
+        if isinstance(pre_disk, int) and isinstance(post_disk, int):
+            derived["compact_disk_saved"][profile] = pre_disk - post_disk
+        pre_apparent = _stage_field(st, "pre_compact", "data_dir_apparent_bytes")
+        post_apparent = _stage_field(st, "post_compact", "data_dir_apparent_bytes")
+        if isinstance(pre_apparent, int) and isinstance(post_apparent, int):
+            derived["compact_apparent_saved"][profile] = pre_apparent - post_apparent
 
         for bench in (doc.get("performance") or {}).get("benchmarks") or []:
-            key = bench.get("fullname") or bench.get("name") or "unknown"
+            fullname = bench.get("fullname") or bench.get("name") or "unknown"
+            key = fullname
+            if "read_post_insert" in fullname:
+                key = "read_post_insert"
+            elif "read_post_compact" in fullname:
+                key = "read_post_compact"
             perf.setdefault(key, {})[profile] = {
                 "mean": bench.get("mean"),
                 "median": bench.get("median"),
@@ -49,11 +98,13 @@ def _comparison(results: dict[str, Any]) -> dict[str, Any]:
             }
 
     return {
-        "storage_data_dir_disk_bytes": storage_disk,
-        "storage_meta_disk_bytes": storage_meta,
-        # 兼容旧字段名；值已与 disk_bytes 对齐
-        "storage_data_dir_bytes": storage_disk,
+        **storage_cols,
+        "compact_disk_saved": derived["compact_disk_saved"] or None,
+        "compact_apparent_saved": derived["compact_apparent_saved"] or None,
         "performance_by_benchmark": perf,
+        # 兼容旧字段名
+        "storage_data_dir_disk_bytes": storage_cols["post_insert_disk"],
+        "storage_data_dir_bytes": storage_cols["post_insert_disk"],
     }
 
 
@@ -107,18 +158,29 @@ def main() -> int:
     if summary_path:
         with open(summary_path, "w", encoding="utf-8") as summary:
             summary.write("# Nebula Benchmark — AI Run Report\n\n")
-            summary.write("| profile | status | data_dir_disk_bytes | meta_disk_bytes |\n")
-            summary.write("|---------|--------|---------------------|-----------------|\n")
+            summary.write(
+                "| profile | status | post_insert_disk | pre_compact_disk | "
+                "post_compact_disk | compact_sec |\n"
+            )
+            summary.write(
+                "|---------|--------|------------------|------------------|"
+                "-------------------|-------------|\n"
+            )
             for profile in PROFILES:
                 doc = results.get(profile)
                 if not doc:
-                    summary.write(f"| {profile} | _missing_ | — | — |\n")
+                    summary.write(f"| {profile} | _missing_ | — | — | — | — |\n")
                     continue
                 status = (doc.get("outcome") or {}).get("status", "?")
                 st = doc.get("storage") or {}
-                data_disk = st.get("data_dir_disk_bytes", st.get("data_dir_bytes", "—"))
-                meta_disk = st.get("meta_disk_bytes", st.get("meta_bytes", "—"))
-                summary.write(f"| {profile} | `{status}` | `{data_disk}` | `{meta_disk}` |\n")
+                post_insert = _stage_field(st, "post_insert", "data_dir_disk_bytes")
+                pre_compact = _stage_field(st, "pre_compact", "data_dir_disk_bytes")
+                post_compact = _stage_field(st, "post_compact", "data_dir_disk_bytes")
+                compact_sec = _compact_sec(st)
+                summary.write(
+                    f"| {profile} | `{status}` | `{post_insert}` | `{pre_compact}` | "
+                    f"`{post_compact}` | `{compact_sec}` |\n"
+                )
             summary.write("\n## Full JSON\n\n```json\n")
             json.dump(merged, summary, indent=2, ensure_ascii=False)
             summary.write("\n```\n")

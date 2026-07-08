@@ -44,6 +44,9 @@ for rel in \
   scripts/nebula-bench-paths.sh \
   scripts/ci-benchmark-emit-profile-report.py \
   scripts/ci-benchmark-merge-reports.py \
+  scripts/bench-storage-record.py \
+  scripts/bench-compact-spaces.py \
+  scripts/bench-read-insert-space.py \
   scripts/bench-wait-graph-ready.py \
   scripts/bench-patch-nebula-tests.sh \
   requirements-bench-ci.txt \
@@ -115,25 +118,68 @@ print('bench modules ok')
 fi
 rm -f "${_preflight_log}"
 
-# storage 采集函数 smoke test（不依赖 nebula 进程）
+# storage schema v2 smoke（不依赖 nebula 进程）
 _smoke_profile="preflight-smoke"
 _smoke_dir="${NEBULA_ROOT}/data-${_smoke_profile}"
 _smoke_json="${NEBULA_ROOT}/tests/.pytest/preflight-storage-smoke.json"
-rm -rf "${_smoke_dir}"
+_smoke_compact="${BENCH_ROOT}/scripts/fixtures/benchmark-data-v2-compact.json"
+rm -rf "${_smoke_dir}" "${_smoke_json}"
 mkdir -p "${_smoke_dir}/storage" "${_smoke_dir}/meta"
 echo "bench" > "${_smoke_dir}/storage/sample.dat"
-export NEBULA_BENCH_STORAGE_STAGE=preflight_smoke
-if ! nebula_bench_record_data_dir_size "${_smoke_profile}" "${_smoke_json}" >/dev/null; then
-  echo "nebula_bench_record_data_dir_size smoke test failed" >&2
+echo "meta" > "${_smoke_dir}/meta/sample.dat"
+
+if ! "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" init \
+  --profile "${_smoke_profile}" --out "${_smoke_json}"; then
+  echo "bench-storage-record init failed" >&2
   rm -rf "${_smoke_dir}" "${_smoke_json}"
   exit 1
 fi
-if ! grep -q '"measurement_stage": "preflight_smoke"' "${_smoke_json}"; then
-  echo "storage json missing expected measurement_stage" >&2
+
+for _stage in post_insert pre_compact post_compact; do
+  if ! "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
+    --profile "${_smoke_profile}" --stage "${_stage}" --out "${_smoke_json}" \
+    --nebula-root "${NEBULA_ROOT}"; then
+    echo "bench-storage-record append-stage ${_stage} failed" >&2
+    rm -rf "${_smoke_dir}" "${_smoke_json}"
+    exit 1
+  fi
+done
+
+if ! "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" merge-compact \
+  --compact-json "${_smoke_compact}" --out "${_smoke_json}"; then
+  echo "bench-storage-record merge-compact failed" >&2
   rm -rf "${_smoke_dir}" "${_smoke_json}"
   exit 1
 fi
+
+if ! "${BENCH_PYTHON}" -c "
+import json
+from pathlib import Path
+path = Path('${_smoke_json}')
+doc = json.loads(path.read_text())
+assert doc.get('schema_version') == 2, doc.get('schema_version')
+fields = (
+    'data_dir_disk_bytes', 'data_dir_apparent_bytes',
+    'storage_disk_bytes', 'storage_apparent_bytes',
+    'meta_disk_bytes', 'meta_apparent_bytes',
+)
+for stage in ('post_insert', 'pre_compact', 'post_compact'):
+    block = doc['stages'][stage]
+    for key in fields:
+        val = block[key]
+        assert isinstance(val, int) and val >= 0, (stage, key, val)
+compact = doc['compact']
+assert compact['outcome'] == 'success'
+assert isinstance(compact['duration_sec'], (int, float))
+assert compact['job_ids'] == [42]
+assert doc['data_dir_disk_bytes'] == doc['stages']['post_insert']['data_dir_disk_bytes']
+print('storage v2 smoke ok')
+"; then
+  echo "storage v2 type assertion failed" >&2
+  rm -rf "${_smoke_dir}" "${_smoke_json}"
+  exit 1
+fi
+
 rm -rf "${_smoke_dir}" "${_smoke_json}"
-unset NEBULA_BENCH_STORAGE_STAGE
 
 log "ok"

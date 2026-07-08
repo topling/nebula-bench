@@ -1,0 +1,7 @@
+{
+  "duration_sec": 12.5,
+  "spaces": ["benchinsertspace"],
+  "job_ids": [42],
+  "outcome": "success",
+  "error": null
+}

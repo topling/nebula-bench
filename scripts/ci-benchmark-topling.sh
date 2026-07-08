@@ -152,9 +152,14 @@ stop_standalone() {
 }
 
 run_official_bench() {
-  local port insert_json lookup_json insert_rc=0 lookup_rc=0
+  local port insert_json lookup_json read1_json read2_json compact_json data_json
+  local insert_rc=0 read_post_insert_rc=0 compact_rc=0 read_post_compact_rc=0 lookup_rc=0
   port="$(graph_port)"
   insert_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}.json"
+  read1_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-read-post-insert.json"
+  read2_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-read-post-compact.json"
+  compact_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-compact.json"
+  data_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-data.json"
   lookup_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-lookup.json"
   mkdir -p "$(dirname "${insert_json}")"
   log "running official tests/bench on 127.0.0.1:${port}"
@@ -164,7 +169,6 @@ run_official_bench() {
   # shellcheck source=bench-python-env.sh
   source "${BENCH_ROOT}/scripts/bench-python-env.sh"
   export PYTHONPATH="${NEBULA_ROOT}"
-  # conf 中 heartbeat_interval_secs=10 → get_delay_time 公式 (10+1)*3
   export NEBULA_BENCH_FIXED_GRAPH_DELAY=33
   # shellcheck source=bench-seed-pytest-state.sh
   source "${BENCH_ROOT}/scripts/bench-seed-pytest-state.sh"
@@ -176,40 +180,83 @@ run_official_bench() {
     -v
   )
 
-  # insert 完成后、class cleanup DROP SPACE 之前量盘：跳过 cleanup，测完再跑 lookup。
   export NEBULA_BENCH_SKIP_CLEANUP=1
   "${BENCH_PYTHON}" -m pytest \
     "${NEBULA_ROOT}/tests/bench/insert.py" \
     "${pytest_common[@]}" \
     --benchmark-json="${insert_json}" || insert_rc=$?
 
-  if (( insert_rc == 0 )); then
-    export NEBULA_BENCH_STORAGE_STAGE=post_insert_pre_drop
-    record_bench_data_size
-  else
-    log "skip storage record: insert benchmark failed (rc=${insert_rc})"
-  fi
-  unset NEBULA_BENCH_SKIP_CLEANUP NEBULA_BENCH_STORAGE_STAGE
-
-  "${BENCH_PYTHON}" -m pytest \
-    "${NEBULA_ROOT}/tests/bench/lookup.py" \
-    "${pytest_common[@]}" \
-    --benchmark-json="${lookup_json}" || lookup_rc=$?
-
   if (( insert_rc != 0 )); then
+    unset NEBULA_BENCH_SKIP_CLEANUP
+    export BENCH_PHASE_RC="insert=${insert_rc},read1=0,compact=0,read2=0,lookup=0"
+    log "skip storage/read/compact/lookup: insert failed (rc=${insert_rc})"
     return "${insert_rc}"
   fi
-  return "${lookup_rc}"
-}
 
-record_bench_data_size() {
-  local human bytes size_json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}-data.json"
-  if ! human="$(nebula_bench_record_data_dir_size "${PROFILE_SUFFIX}" "${size_json}")"; then
-    log "warn: failed to record data_dir size (${DATA_DIR})"
-    return 0
+  "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" init \
+    --profile "${PROFILE_SUFFIX}" --out "${data_json}"
+  "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
+    --profile "${PROFILE_SUFFIX}" --stage post_insert --out "${data_json}"
+
+  export BENCH_GRAPH_HOST="127.0.0.1"
+  export BENCH_GRAPH_PORT="${port}"
+  export BENCH_READ_STAGE=post_insert
+  "${BENCH_PYTHON}" -m pytest \
+    "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+    "${pytest_common[@]}" \
+    --benchmark-json="${read1_json}" || read_post_insert_rc=$?
+
+  if (( read_post_insert_rc == 0 )); then
+    "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
+      --profile "${PROFILE_SUFFIX}" --stage pre_compact --out "${data_json}"
+
+    if [[ "${BENCH_SKIP_COMPACT:-}" != "1" ]]; then
+      export BENCH_COMPACT_JSON="${compact_json}"
+      "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-compact-spaces.py" || compact_rc=$?
+    else
+      log "BENCH_SKIP_COMPACT=1: skipping compact (local/debug only)"
+    fi
+
+    if [[ -f "${compact_json}" ]]; then
+      "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" merge-compact \
+        --compact-json "${compact_json}" --out "${data_json}"
+    fi
+
+    "${BENCH_PYTHON}" "${BENCH_ROOT}/scripts/bench-storage-record.py" append-stage \
+      --profile "${PROFILE_SUFFIX}" --stage post_compact --out "${data_json}"
+
+    if (( compact_rc == 0 )); then
+      export BENCH_READ_STAGE=post_compact
+      "${BENCH_PYTHON}" -m pytest \
+        "${BENCH_ROOT}/scripts/bench-read-insert-space.py" \
+        "${pytest_common[@]}" \
+        --benchmark-json="${read2_json}" || read_post_compact_rc=$?
+    fi
+  else
+    log "fail-fast: skip compact/read2/lookup after read_post_insert rc=${read_post_insert_rc}"
   fi
-  bytes="$(du -sk "${DATA_DIR}" | awk '{print $1 * 1024}')"
-  log "data_dir ${DATA_DIR} disk: ${human} (${bytes} bytes, ${size_json})"
+
+  unset NEBULA_BENCH_SKIP_CLEANUP BENCH_READ_STAGE
+
+  if (( compact_rc == 0 && read_post_insert_rc == 0 )); then
+    "${BENCH_PYTHON}" -m pytest \
+      "${NEBULA_ROOT}/tests/bench/lookup.py" \
+      "${pytest_common[@]}" \
+      --benchmark-json="${lookup_json}" || lookup_rc=$?
+  else
+    log "skip lookup: compact_rc=${compact_rc} read1_rc=${read_post_insert_rc}"
+  fi
+
+  export BENCH_PHASE_RC="insert=${insert_rc},read1=${read_post_insert_rc},compact=${compact_rc},read2=${read_post_compact_rc},lookup=${lookup_rc}"
+
+  local bench_rc=0
+  if (( insert_rc != 0 )); then bench_rc=${insert_rc}
+  elif (( read_post_insert_rc != 0 )); then bench_rc=${read_post_insert_rc}
+  elif (( compact_rc != 0 )); then bench_rc=${compact_rc}
+  elif (( read_post_compact_rc != 0 )); then bench_rc=${read_post_compact_rc}
+  elif (( lookup_rc != 0 )); then bench_rc=${lookup_rc}
+  fi
+  return "${bench_rc}"
 }
 
 emit_profile_report() {

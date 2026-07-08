@@ -75,6 +75,11 @@ nebula_bench_du_disk_bytes() {
   echo $(( $(du -sk "${path}" | cut -f1) * 1024 ))
 }
 
+nebula_bench_du_apparent_bytes() {
+  local path=$1
+  du -sb "${path}" | cut -f1
+}
+
 # 测完后记录数据目录占用；stdout 为实际占盘可读格式，并写入 JSON。
 # data_dir_bytes / storage_bytes / meta_bytes 均为 du -sk 块占用（非 du -sb 逻辑长度）。
 nebula_bench_record_data_dir_size() {
