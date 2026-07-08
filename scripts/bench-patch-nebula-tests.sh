@@ -29,6 +29,34 @@ if [[ -f "${_insert}" ]] && grep -q 'self\.graph_delay' "${_insert}"; then
   sed -i 's/self\.graph_delay/self.delay/g' "${_insert}"
 fi
 
+for _bench_cleanup in insert.py lookup.py; do
+  _cf="${NEBULA_ROOT}/tests/bench/${_bench_cleanup}"
+  [[ -f "${_cf}" ]] || continue
+  if grep -q 'def cleanup(self):' "${_cf}" && ! grep -q 'NEBULA_BENCH_SKIP_CLEANUP' "${_cf}"; then
+    python3 - "${_cf}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "    @classmethod\n    def cleanup(self):\n"
+guard = (
+    "    @classmethod\n"
+    "    def cleanup(self):\n"
+    "        import os\n"
+    "        if os.environ.get(\"NEBULA_BENCH_SKIP_CLEANUP\"):\n"
+    "            return\n"
+)
+if needle not in text:
+    if "NEBULA_BENCH_SKIP_CLEANUP" in text:
+        sys.exit(0)
+    print(f"cleanup pattern not found in {path}", file=sys.stderr)
+    sys.exit(1)
+path.write_text(text.replace(needle, guard, 1))
+PY
+  fi
+done
+
 # 外挂 standalone 时 get configs 可能长期 Not ready；CI 用 NEBULA_BENCH_FIXED_GRAPH_DELAY 固定 sleep。
 _suite="${NEBULA_ROOT}/tests/common/nebula_test_suite.py"
 if [[ -f "${_suite}" ]] && ! grep -q 'NEBULA_BENCH_FIXED_GRAPH_DELAY' "${_suite}"; then

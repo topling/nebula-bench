@@ -152,7 +152,7 @@ stop_standalone() {
 }
 
 run_official_bench() {
-  local port json
+  local port json insert_rc=0 lookup_rc=0
   port="$(graph_port)"
   json="${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${BENCH_PROFILE}.json"
   mkdir -p "$(dirname "${json}")"
@@ -167,13 +167,31 @@ run_official_bench() {
   export NEBULA_BENCH_FIXED_GRAPH_DELAY=33
   # shellcheck source=bench-seed-pytest-state.sh
   source "${BENCH_ROOT}/scripts/bench-seed-pytest-state.sh"
+
+  local -a pytest_common=(
+    --address="127.0.0.1:${port}"
+    --stop_nebula=false --rm_dir=false
+    --benchmark-only
+    --benchmark-json="${json}"
+    -v
+  )
+
+  # insert 完成后、class cleanup DROP SPACE 之前量盘：跳过 cleanup，测完再跑 lookup。
+  export NEBULA_BENCH_SKIP_CLEANUP=1
   "${BENCH_PYTHON}" -m pytest \
     "${NEBULA_ROOT}/tests/bench/insert.py" \
+    "${pytest_common[@]}" || insert_rc=$?
+  record_bench_data_size
+  unset NEBULA_BENCH_SKIP_CLEANUP
+
+  "${BENCH_PYTHON}" -m pytest \
     "${NEBULA_ROOT}/tests/bench/lookup.py" \
-    --address="127.0.0.1:${port}" \
-    --stop_nebula=false --rm_dir=false \
-    --benchmark-only \
-    --benchmark-json="${json}" -v
+    "${pytest_common[@]}" || lookup_rc=$?
+
+  if (( insert_rc != 0 )); then
+    return "${insert_rc}"
+  fi
+  return "${lookup_rc}"
 }
 
 record_bench_data_size() {
@@ -182,8 +200,8 @@ record_bench_data_size() {
     log "warn: failed to record data_dir size (${DATA_DIR})"
     return 0
   fi
-  bytes="$(du -sb "${DATA_DIR}" | cut -f1)"
-  log "data_dir ${DATA_DIR} size: ${human} (${bytes} bytes, ${size_json})"
+  bytes="$(du -sk "${DATA_DIR}" | awk '{print $1 * 1024}')"
+  log "data_dir ${DATA_DIR} disk: ${human} (${bytes} bytes, ${size_json})"
 }
 
 emit_profile_report() {
@@ -209,7 +227,6 @@ main() {
   start_standalone
   local bench_rc=0
   run_official_bench || bench_rc=$?
-  record_bench_data_size
   emit_profile_report "${bench_rc}"
   log "benchmark finished"
   (( bench_rc )) && exit "${bench_rc}"

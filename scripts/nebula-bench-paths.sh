@@ -70,11 +70,18 @@ nebula_bench_install_standalone_conf() {
   ln -sf "${data_dir}/cluster.id" "${install_dir}/cluster.id"
 }
 
-# 测完后记录数据目录占用；stdout 为逻辑字节的可读格式（与 JSON 一致），并写入 JSON。
+nebula_bench_du_disk_bytes() {
+  local path=$1
+  echo $(( $(du -sk "${path}" | cut -f1) * 1024 ))
+}
+
+# 测完后记录数据目录占用；stdout 为实际占盘可读格式，并写入 JSON。
+# data_dir_bytes / storage_bytes / meta_bytes 均为 du -sk 块占用（非 du -sb 逻辑长度）。
 nebula_bench_record_data_dir_size() {
   local profile=$1
   local out_json="${2:-${NEBULA_ROOT}/tests/.pytest/benchmark-ci-${profile}-data.json}"
-  local data_dir bytes storage_bytes meta_bytes disk_bytes human
+  local data_dir bytes storage_bytes meta_bytes disk_bytes storage_disk meta_disk
+  local apparent_bytes storage_apparent meta_apparent human
 
   data_dir="$(nebula_bench_data_dir "${profile}")"
   if [[ ! -d "${data_dir}" ]]; then
@@ -82,18 +89,27 @@ nebula_bench_record_data_dir_size() {
     return 1
   fi
 
-  bytes="$(du -sb "${data_dir}" | cut -f1)"
+  disk_bytes="$(nebula_bench_du_disk_bytes "${data_dir}")"
+  bytes="${disk_bytes}"
+  storage_disk=0
+  meta_disk=0
+  storage_apparent=0
+  meta_apparent=0
   if [[ -d "${data_dir}/storage" ]]; then
-    storage_bytes="$(du -sb "${data_dir}/storage" | cut -f1)"
+    storage_disk="$(nebula_bench_du_disk_bytes "${data_dir}/storage")"
+    storage_bytes="${storage_disk}"
+    storage_apparent="$(du -sb "${data_dir}/storage" | cut -f1)"
   else
     storage_bytes=0
   fi
   if [[ -d "${data_dir}/meta" ]]; then
-    meta_bytes="$(du -sb "${data_dir}/meta" | cut -f1)"
+    meta_disk="$(nebula_bench_du_disk_bytes "${data_dir}/meta")"
+    meta_bytes="${meta_disk}"
+    meta_apparent="$(du -sb "${data_dir}/meta" | cut -f1)"
   else
     meta_bytes=0
   fi
-  disk_bytes="$(( $(du -sk "${data_dir}" | cut -f1) * 1024 ))"
+  apparent_bytes="$(du -sb "${data_dir}" | cut -f1)"
   human="$(nebula_bench_format_bytes "${bytes}")"
 
   mkdir -p "$(dirname "${out_json}")"
@@ -103,8 +119,13 @@ nebula_bench_record_data_dir_size() {
   "data_dir": "${data_dir}",
   "data_dir_bytes": ${bytes},
   "data_dir_disk_bytes": ${disk_bytes},
+  "data_dir_apparent_bytes": ${apparent_bytes},
   "storage_bytes": ${storage_bytes},
-  "meta_bytes": ${meta_bytes}
+  "storage_disk_bytes": ${storage_disk},
+  "storage_apparent_bytes": ${storage_apparent},
+  "meta_bytes": ${meta_bytes},
+  "meta_disk_bytes": ${meta_disk},
+  "meta_apparent_bytes": ${meta_apparent}
 }
 EOF
 

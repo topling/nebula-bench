@@ -132,7 +132,7 @@ def main() -> int:
             summary.write(f"- **benchmark_exit_code**: `{bench_rc}`\n")
             if report["storage"].get("available"):
                 summary.write(
-                    f"- **data_dir_bytes**: `{report['storage'].get('data_dir_bytes')}`\n"
+                    f"- **data_dir_disk_bytes**: `{report['storage'].get('data_dir_disk_bytes')}`\n"
                 )
             summary.write("\n```json\n")
             json.dump(report, summary, indent=2, ensure_ascii=False)
