@@ -1,8 +1,8 @@
 # NebulaGraph × ToplingDB 性能对比报告
 
-**Workflow**：[topling/nebula-bench #28741557759](https://github.com/topling/nebula-bench/actions/runs/28741557759)  
+**Workflow**：[topling/nebula-topling-bench #28741557759](https://github.com/topling/nebula-topling-bench/actions/runs/28741557759)  
 **日期**：2026-07-05  
-**分支**：`nebula-bench@dc06e7b` · `topling/nebula@toplingdb-bench` (`b8868c248`)  
+**分支**：`nebula-topling-bench@dc06e7b` · `topling/nebula@toplingdb-bench` (`b8868c248`)  
 **结论**：❌ 三组均未产出有效 benchmark 数据
 
 ## 概要
@@ -44,10 +44,10 @@
 
 ## 根因分析
 
-1. **rocksdb pytest 环境**（nebula-bench 可修）：编排层未 seed `tests/.pytest/*` 状态文件。
+1. **rocksdb pytest 环境**（nebula-topling-bench 可修）：编排层未 seed `tests/.pytest/*` 状态文件。
 2. **ToplingDB 链接 ABI**（需 nebula 侧决策）：Nebula 用 third-party 头文件编译 `RocksEngineConfig.cpp`，但链接 ToplingDB 的 `librocksdb.so`；符号签名/导出与 bundled RocksDB 不一致，导致 undefined reference。仅改 `FindRocksdb.cmake` 不足以完成链接，除非 ToplingDB 与 Nebula 所用 RocksDB API 完全兼容，或 Nebula 增加最小适配。
 
-## 本轮 nebula-bench CI 修复（已合并）
+## 本轮 nebula-topling-bench CI 修复（已合并）
 
 | Commit | 内容 |
 |--------|------|
@@ -60,13 +60,13 @@
 
 | 优先级 | 项 | 负责 |
 |--------|-----|------|
-| P0 | `bench-seed-pytest-state.sh` 在跑 pytest 前写入 `.pytest/nebula` + `.pytest/spaces` | nebula-bench（本 commit，待下轮 workflow 验证） |
+| P0 | `bench-seed-pytest-state.sh` 在跑 pytest 前写入 `.pytest/nebula` + `.pytest/spaces` | nebula-topling-bench（本 commit，待下轮 workflow 验证） |
 | P0 | ToplingDB 链接 undefined reference：对齐头文件/库版本或最小 src 适配 | nebula `toplingdb-bench`（需确认是否允许超出 `FindRocksdb.cmake`） |
-| P1 | 下轮 workflow 通过后，本报告追加 benchmark 数值表 | nebula-bench |
+| P1 | 下轮 workflow 通过后，本报告追加 benchmark 数值表 | nebula-topling-bench |
 
 ## 复现
 
 ```bash
 # 仅通过 GitHub Actions
-# https://github.com/topling/nebula-bench/actions/workflows/benchmark.yml
+# https://github.com/topling/nebula-topling-bench/actions/workflows/benchmark.yml
 ```

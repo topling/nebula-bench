@@ -1,4 +1,4 @@
-# nebula-bench
+# nebula-topling-bench
 
 NebulaGraph 性能对比编排仓库（仅 bash + workflow + 配置）。
 
@@ -12,6 +12,7 @@ NebulaGraph 性能对比编排仓库（仅 bash + workflow + 配置）。
 
 | 路径 | 说明 |
 |------|------|
+| [`docs/official-nebulagraph-benchmark-landscape.md`](docs/official-nebulagraph-benchmark-landscape.md) | vesoft 官方上层 benchmark 全景（AI 参考；不含 nebula 工程内 bench） |
 | [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) | 项目铁律 |
 | `.github/workflows/benchmark.yml` | CI |
 | `scripts/*.sh` | 构建、启动、跑 bench |
@@ -47,7 +48,10 @@ nebula 上游已集成 ToplingDB 动态链接（`USE_TOPLINGDB`、`EXTERNAL_TOPL
 | **conservative / enterprise** | `-DEXTERNAL_TOPLINGDB_ROOT=${TOPLINGDB_ROOT}`，链 `librocksdb.so`（仅 shared） |
 
 ToplingDB **须 shared 链接**——见 [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) 铁律 #1。  
-性能基准**只准调用 nebula 官方 `tests/bench/`**——见 [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) 铁律 #2。
+性能基准**只准调用 nebula 官方 `tests/bench/`**——见 [`PROJECT_IRON_RULES.md`](PROJECT_IRON_RULES.md) 铁律 #2。  
+本地 **`../nebulagraph-toplingdb`** 仅作只读交叉参考（查代码 / git 历史），**不得**作 bench 编译测试——见铁律 #3。  
+官方 `tests/bench/` **名不符实**须报错停工——见铁律 #4。  
+**不得 patch** checkout 出的 nebula 源码（含 `bench-patch-nebula-tests.sh`）——见铁律 #5。
 
 以下两个 yaml 仅为开箱即用的 Easy Migrate 示例，编译运行不依赖它们；本仓库 bench 启动脚本会引用它们做 conservative / enterprise 对比：
 

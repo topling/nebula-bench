@@ -10,8 +10,8 @@ PROFILE="${TOPLING_MIGRATE_PROFILE:-enterprise}"
 BUILD_DIR="${BUILD_DIR:-${NEBULA_ROOT}/build-topling}"
 INSTALL_DIR="${INSTALL_DIR:-${NEBULA_ROOT}/install-topling}"
 
-# shellcheck source=nebula-bench-paths.sh
-source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
+# shellcheck source=nebula-topling-bench-paths.sh
+source "${BENCH_ROOT}/scripts/nebula-topling-bench-paths.sh"
 nebula_bench_validate_profile "${PROFILE}"
 
 if [[ ! -f "${TOPLINGDB_ROOT}/librocksdb.so" ]]; then

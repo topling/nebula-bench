@@ -1,6 +1,6 @@
 # NebulaGraph × ToplingDB 性能对比报告
 
-**Workflow**：[#28817653689](https://github.com/topling/nebula-bench/actions/runs/28817653689)（`b775110`，最新）  
+**Workflow**：[#28817653689](https://github.com/topling/nebula-topling-bench/actions/runs/28817653689)（`b775110`，最新）  
 **日期**：2026-07-06
 
 ## 日志结论（以 Actions 为准）
@@ -11,7 +11,7 @@
 | **conservative** | ✅ | ❌ | **编排错误**：`static_lib` + `bench-patch-nebula-rocksdb-link.sh` 改链 `librocksdb.a` |
 | **enterprise** | ✅ | ❌ | 同上 |
 
-ToplingDB 构建与 `librocksdb.so` 产出正常；conservative/enterprise 链接失败是 **nebula-bench 擅自改链接方式** 导致，不是 ToplingDB 有问题。
+ToplingDB 构建与 `librocksdb.so` 产出正常；conservative/enterprise 链接失败是 **nebula-topling-bench 擅自改链接方式** 导致，不是 ToplingDB 有问题。
 
 ## rocksdb 根因
 
@@ -39,4 +39,4 @@ undefined reference to rocksdb::GetDBOptionsFromMap ...
 
 ## 复现
 
-https://github.com/topling/nebula-bench/actions/workflows/benchmark.yml
+https://github.com/topling/nebula-topling-bench/actions/workflows/benchmark.yml

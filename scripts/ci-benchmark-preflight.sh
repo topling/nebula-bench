@@ -41,7 +41,7 @@ for rel in \
   scripts/build-rocksdb.sh \
   scripts/run-standalone-topling.sh \
   scripts/run-standalone-bench.sh \
-  scripts/nebula-bench-paths.sh \
+  scripts/nebula-topling-bench-paths.sh \
   scripts/ci-benchmark-emit-profile-report.py \
   scripts/ci-benchmark-merge-reports.py \
   scripts/bench-storage-record.py \
@@ -59,8 +59,8 @@ do
   fi
 done
 
-# shellcheck source=nebula-bench-paths.sh
-source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
+# shellcheck source=nebula-topling-bench-paths.sh
+source "${BENCH_ROOT}/scripts/nebula-topling-bench-paths.sh"
 nebula_bench_check_conf_templates "${BENCH_ROOT}"
 
 if [[ -f "${BENCH_ROOT}/scripts/bench-patch-nebula-rocksdb-link.sh" ]]; then

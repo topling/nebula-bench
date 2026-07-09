@@ -40,8 +40,8 @@ if [[ "${CMD}" == "start" ]]; then
   export TOPLINGDB_GetContext_sampling=kNone
 fi
 
-# shellcheck source=nebula-bench-paths.sh
-source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
+# shellcheck source=nebula-topling-bench-paths.sh
+source "${BENCH_ROOT}/scripts/nebula-topling-bench-paths.sh"
 if [[ "${CMD}" == "start" ]]; then
   nebula_bench_install_standalone_conf "${PROFILE}" "${INSTALL_DIR}" "${BENCH_ROOT}"
 fi

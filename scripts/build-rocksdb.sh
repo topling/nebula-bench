@@ -29,7 +29,7 @@ env -u EXTERNAL_TOPLINGDB_ROOT cmake .. \
 cmake --build . -j"$(nproc)"
 cmake --install .
 
-# shellcheck source=nebula-bench-paths.sh
-source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
+# shellcheck source=nebula-topling-bench-paths.sh
+source "${BENCH_ROOT}/scripts/nebula-topling-bench-paths.sh"
 nebula_bench_install_standalone_conf rocksdb "${INSTALL_DIR}" "${BENCH_ROOT}"
 echo "Installed RocksDB baseline to ${INSTALL_DIR}"

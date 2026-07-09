@@ -16,7 +16,7 @@ tmpdir="${NEBULA_ROOT}/tests/.pytest"
 mkdir -p "${tmpdir}"
 
 printf '%s\n' \
-  "{\"ip\":\"127.0.0.1\",\"port\":[${port}],\"work_dir\":\"/tmp/nebula-bench\",\"enable_ssl\":\"false\",\"enable_graph_ssl\":\"false\",\"ca_signed\":\"false\"}" \
+  "{\"ip\":\"127.0.0.1\",\"port\":[${port}],\"work_dir\":\"/tmp/nebula-topling-bench\",\"enable_ssl\":\"false\",\"enable_graph_ssl\":\"false\",\"ca_signed\":\"false\"}" \
   > "${tmpdir}/nebula"
 
 printf '%s\n' \

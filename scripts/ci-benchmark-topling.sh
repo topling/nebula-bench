@@ -30,8 +30,8 @@ case "${BENCH_PROFILE}" in
   conservative|enterprise) INSTALL_DIR="${NEBULA_ROOT}/install-topling" ;;
 esac
 
-# shellcheck source=nebula-bench-paths.sh
-source "${BENCH_ROOT}/scripts/nebula-bench-paths.sh"
+# shellcheck source=nebula-topling-bench-paths.sh
+source "${BENCH_ROOT}/scripts/nebula-topling-bench-paths.sh"
 DATA_DIR="$(nebula_bench_data_dir "${PROFILE_SUFFIX}")"
 
 log() { echo "[ci-benchmark:${BENCH_PROFILE}] $*"; }

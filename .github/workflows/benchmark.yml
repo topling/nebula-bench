@@ -44,7 +44,7 @@ jobs:
       BENCH_PROFILE: ${{ matrix.profile }}
       INSTALL_SYSTEM_DEPS: "1"
     steps:
-      - name: Checkout nebula-bench
+      - name: Checkout nebula-topling-bench
         uses: actions/checkout@v4
 
       - name: Checkout NebulaGraph
@@ -81,7 +81,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout nebula-bench
+      - name: Checkout nebula-topling-bench
         uses: actions/checkout@v4
 
       - name: Download profile artifacts

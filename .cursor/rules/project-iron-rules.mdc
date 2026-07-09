@@ -1,5 +1,5 @@
 ---
-description: 执行 nebula-bench 项目铁律（权威文本见 PROJECT_IRON_RULES.md）
+description: 执行 nebula-topling-bench 项目铁律（权威文本见 PROJECT_IRON_RULES.md）
 alwaysApply: true
 ---
 
@@ -8,4 +8,7 @@ alwaysApply: true
 **权威文本**：仓库根目录 [`PROJECT_IRON_RULES.md`](../../PROJECT_IRON_RULES.md)。不得只读本文件而不读正文。
 
 执行时遵守 `PROJECT_IRON_RULES.md` 全部条款；链接/编译契约变更必须先列差异并由维护者确认。  
-**性能 benchmark 只准调用 nebula 官方 `tests/bench/`，禁止在本仓库自写 pytest 性能测试**（铁律 #2）。
+**性能 benchmark 只准调用 nebula 官方 `tests/bench/`，禁止在本仓库自写 pytest 性能测试**（铁律 #2）。  
+**`../nebulagraph-toplingdb` 只读参考（查代码 / git 历史），禁止作 bench 编译测试**（铁律 #3）。  
+**官方用例名不符实须报错停工**（铁律 #4）。  
+**不得 patch checkout 出的 nebula 源码**（铁律 #5）。
